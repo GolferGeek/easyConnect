@@ -34,10 +34,27 @@ struct HomeView: View {
                     }
                 } else {
                     List {
-                        ForEach(groupManager.groups) { group in
-                            GroupRow(group: group) {
-                                selectedGroup = group
-                                showingActionSheet = true
+                        if !groupManager.pendingInvites.isEmpty {
+                            Section("Invitations") {
+                                ForEach(groupManager.pendingInvites, id: \.groups.id) { invite in
+                                    GroupInviteRow(invite: invite) {
+                                        Task {
+                                            try? await groupManager.respondToInvite(groupId: invite.groups.id, accept: true)
+                                        }
+                                    } onDecline: {
+                                        Task {
+                                            try? await groupManager.respondToInvite(groupId: invite.groups.id, accept: false)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Section("My Groups") {
+                            ForEach(groupManager.groups) { group in
+                                NavigationLink(destination: GroupDetailView(groupId: group.id, authManager: authManager)) {
+                                    GroupRow(group: group)
+                                }
                             }
                         }
                     }
@@ -94,28 +111,53 @@ struct HomeView: View {
 
 struct GroupRow: View {
     let group: Group
-    let onTap: () -> Void
     
     var body: some View {
-        Button(action: onTap) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text(group.name)
-                        .font(.headline)
-                    
-                    Text("\(group.memberCount) members")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                }
+        HStack {
+            VStack(alignment: .leading) {
+                Text(group.name)
+                    .font(.headline)
                 
-                Spacer()
-                
-                if group.isOwner {
-                    Image(systemName: "star.fill")
-                        .foregroundColor(.yellow)
-                }
+                Text("\(group.memberCount) members")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
             }
-            .padding(.vertical, 8)
+            
+            Spacer()
+            
+            if group.isOwner {
+                Image(systemName: "star.fill")
+                    .foregroundColor(.yellow)
+            }
         }
+        .padding(.vertical, 8)
+    }
+}
+
+struct GroupInviteRow: View {
+    let invite: GroupManager.GroupInvite
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(invite.groups.name)
+                .font(.headline)
+            
+            HStack {
+                Button(action: onAccept) {
+                    Label("Accept", systemImage: "checkmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .tint(.green)
+                
+                Button(action: onDecline) {
+                    Label("Decline", systemImage: "xmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+            }
+        }
+        .padding(.vertical, 4)
     }
 } 

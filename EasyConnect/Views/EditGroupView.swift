@@ -1,9 +1,11 @@
 import SwiftUI
 
-struct CreateGroupView: View {
+struct EditGroupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authManager: AuthManager
     @StateObject private var groupManager: GroupManager
+    
+    let groupId: String
     
     @State private var groupName = ""
     @State private var groupDescription = ""
@@ -13,20 +15,13 @@ struct CreateGroupView: View {
     @State private var selectedSubType: GroupManager.GroupType.SubType?
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var showEditGroup = false
-    @State private var createdGroupId: String?
+    @State private var showMemberManagement = false
+    @State private var group: Group?
+    @State private var showMembersSheet = false
     
-    init(authManager: AuthManager) {
+    init(groupId: String, authManager: AuthManager) {
+        self.groupId = groupId
         _groupManager = StateObject(wrappedValue: GroupManager(authManager: authManager))
-    }
-    
-    var isFormValid: Bool {
-        !groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        selectedGroupTypeId != 0
-    }
-    
-    var selectedGroupType: GroupManager.GroupType? {
-        groupManager.groupTypes.first { $0.id == selectedGroupTypeId }
     }
     
     var body: some View {
@@ -66,6 +61,12 @@ struct CreateGroupView: View {
                     }
                 }
                 
+                Section {
+                    Button("Manage Members") {
+                        showMemberManagement = true
+                    }
+                }
+                
                 if let error = errorMessage {
                     Section {
                         Text(error)
@@ -73,7 +74,7 @@ struct CreateGroupView: View {
                     }
                 }
             }
-            .navigationTitle("Create Group")
+            .navigationTitle("Edit Group")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -84,10 +85,10 @@ struct CreateGroupView: View {
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        createGroup()
+                    Button("Save") {
+                        saveGroup()
                     }
-                    .disabled(!isFormValid || isLoading)
+                    .disabled(isLoading)
                 }
             }
             .overlay {
@@ -98,23 +99,36 @@ struct CreateGroupView: View {
                         .background(.black.opacity(0.2))
                 }
             }
-            .fullScreenCover(isPresented: $showEditGroup) {
-                if let groupId = createdGroupId {
-                    EditGroupView(groupId: groupId, authManager: authManager)
-                }
+            .sheet(isPresented: $showMemberManagement) {
+                GroupMemberManagementView(groupId: groupId, authManager: authManager)
+            }
+            .sheet(isPresented: $showMembersSheet) {
+                GroupMembersView(groupId: groupId, authManager: authManager)
             }
             .task {
                 do {
                     try await groupManager.fetchGroupTypes()
+                    let fetchedGroup = try await groupManager.fetchGroup(id: groupId)
+                    
+                    // Update all the form fields
+                    groupName = fetchedGroup.name
+                    groupDescription = fetchedGroup.description ?? ""
+                    visibility = fetchedGroup.visibility
+                    joinMethod = fetchedGroup.joinMethod
+                    group = fetchedGroup
+                    
                 } catch {
-                    errorMessage = "Failed to load group types: \(error.localizedDescription)"
+                    errorMessage = error.localizedDescription
                 }
             }
             .onChange(of: selectedGroupTypeId) { _ in
-                // Reset sub-type selection when group type changes
                 selectedSubType = nil
             }
         }
+    }
+    
+    private var selectedGroupType: GroupManager.GroupType? {
+        groupManager.groupTypes.first { $0.id == selectedGroupTypeId }
     }
     
     private var footerText: Text {
@@ -127,7 +141,7 @@ struct CreateGroupView: View {
         }
     }
     
-    private func createGroup() {
+    private func saveGroup() {
         guard let userId = authManager.currentUser?.id else { return }
         
         isLoading = true
@@ -135,19 +149,18 @@ struct CreateGroupView: View {
         
         Task {
             do {
-                let groupId = try await groupManager.createGroup(
+                try await groupManager.updateGroup(
+                    id: groupId,
                     name: groupName,
-                    description: groupDescription,
+                    description: groupDescription.isEmpty ? nil : groupDescription,
                     visibility: visibility,
                     joinMethod: joinMethod,
-                    userId: userId,
                     groupTypeId: selectedGroupTypeId
                 )
                 
                 DispatchQueue.main.async {
-                    self.createdGroupId = groupId
-                    self.showEditGroup = true
                     self.isLoading = false
+                    self.dismiss()
                 }
             } catch {
                 DispatchQueue.main.async {

@@ -14,6 +14,7 @@ struct GroupMemberManagementView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var searchText = ""
+    @State private var showAllUsers = false
     
     init(groupId: String, authManager: AuthManager) {
         self.groupId = groupId
@@ -21,10 +22,11 @@ struct GroupMemberManagementView: View {
     }
     
     var filteredExistingMembers: [Member] {
+        let members = showAllUsers ? groupManager.allUsers : groupManager.existingMembers
         if searchText.isEmpty {
-            return groupManager.existingMembers
+            return members
         }
-        return groupManager.existingMembers.filter { member in
+        return members.filter { member in
             member.name.localizedCaseInsensitiveContains(searchText) ||
             member.email.localizedCaseInsensitiveContains(searchText)
         }
@@ -38,7 +40,11 @@ struct GroupMemberManagementView: View {
                         .textInputAutocapitalization(.never)
                 }
                 
-                Section(header: Text("Add Members from Existing Groups")) {
+                Section {
+                    Toggle("Show All Users", isOn: $showAllUsers)
+                }
+                
+                Section(header: Text(showAllUsers ? "All Users" : "Add Members from Existing Groups")) {
                     if filteredExistingMembers.isEmpty {
                         Text("No matching members found")
                             .foregroundColor(.gray)
@@ -139,8 +145,22 @@ struct GroupMemberManagementView: View {
             .task {
                 do {
                     try await groupManager.fetchExistingMembers()
+                    if showAllUsers {
+                        try await groupManager.fetchAllUsers()
+                    }
                 } catch {
                     errorMessage = error.localizedDescription
+                }
+            }
+            .onChange(of: showAllUsers) { newValue in
+                Task {
+                    if newValue {
+                        do {
+                            try await groupManager.fetchAllUsers()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
                 }
             }
         }
