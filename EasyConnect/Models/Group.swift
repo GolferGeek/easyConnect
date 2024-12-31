@@ -13,6 +13,7 @@ struct Group: Identifiable, Codable {
     let role: String
     let status: MemberStatus
     let memberCount: Int
+    let groupTypeId: Int
     
     var isOwner: Bool {
         role == "admin"
@@ -46,6 +47,7 @@ struct Group: Identifiable, Codable {
         case role
         case status
         case memberCount = "member_count"
+        case groupTypeId = "group_type_id"
     }
     
     init(groupId: String,
@@ -58,7 +60,8 @@ struct Group: Identifiable, Codable {
          createdBy: String?,
          role: String,
          status: MemberStatus,
-         memberCount: Int) {
+         memberCount: Int,
+         groupTypeId: Int) {
         self.groupId = groupId
         self.userId = userId
         self.name = name
@@ -70,6 +73,7 @@ struct Group: Identifiable, Codable {
         self.role = role
         self.status = status
         self.memberCount = memberCount
+        self.groupTypeId = groupTypeId
     }
     
     init(from decoder: Decoder) throws {
@@ -85,6 +89,7 @@ struct Group: Identifiable, Codable {
         status = try container.decode(MemberStatus.self, forKey: .status)
         memberCount = try container.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
+        groupTypeId = try container.decode(Int.self, forKey: .groupTypeId)
         
         if let dateString = try container.decodeIfPresent(String.self, forKey: .createdAt) {
             let formatter = ISO8601DateFormatter()

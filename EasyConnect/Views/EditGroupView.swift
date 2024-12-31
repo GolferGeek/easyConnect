@@ -17,7 +17,7 @@ struct EditGroupView: View {
     @State private var errorMessage: String?
     @State private var showMemberManagement = false
     @State private var group: Group?
-    @State private var showMembersSheet = false
+    @State private var members: [GroupMember] = []
     
     init(groupId: String, authManager: AuthManager) {
         self.groupId = groupId
@@ -61,7 +61,16 @@ struct EditGroupView: View {
                     }
                 }
                 
-                Section {
+                Section(header: Text("Members (\(members.count))")) {
+                    if members.isEmpty {
+                        Text("No members yet")
+                            .foregroundColor(.gray)
+                    } else {
+                        ForEach(members.filter { $0.status == .joined }, id: \.userId) { member in
+                            GroupMemberRow(member: member)
+                        }
+                    }
+                    
                     Button("Manage Members") {
                         showMemberManagement = true
                     }
@@ -100,15 +109,13 @@ struct EditGroupView: View {
                 }
             }
             .sheet(isPresented: $showMemberManagement) {
-                GroupMemberManagementView(groupId: groupId, authManager: authManager)
-            }
-            .sheet(isPresented: $showMembersSheet) {
                 GroupMembersView(groupId: groupId, authManager: authManager)
             }
             .task {
                 do {
                     try await groupManager.fetchGroupTypes()
                     let fetchedGroup = try await groupManager.fetchGroup(id: groupId)
+                    members = try await groupManager.fetchGroupMembers(groupId: groupId)
                     
                     // Update all the form fields
                     groupName = fetchedGroup.name

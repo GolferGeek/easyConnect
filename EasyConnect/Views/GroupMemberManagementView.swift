@@ -23,13 +23,16 @@ struct GroupMemberManagementView: View {
     
     var filteredExistingMembers: [Member] {
         let members = showAllUsers ? groupManager.allUsers : groupManager.existingMembers
+        print("Filtering members. showAllUsers: \(showAllUsers), count: \(members.count)")
         if searchText.isEmpty {
             return members
         }
-        return members.filter { member in
+        let filtered = members.filter { member in
             member.name.localizedCaseInsensitiveContains(searchText) ||
             member.email.localizedCaseInsensitiveContains(searchText)
         }
+        print("Filtered to \(filtered.count) members matching '\(searchText)'")
+        return filtered
     }
     
     var body: some View {
@@ -50,7 +53,7 @@ struct GroupMemberManagementView: View {
                             .foregroundColor(.gray)
                     } else {
                         ForEach(filteredExistingMembers) { member in
-                            MemberRow(member: member, isSelected: selectedMembers.contains(member)) {
+                            SelectableMemberRow(member: member, isSelected: selectedMembers.contains(member)) {
                                 if selectedMembers.contains(member) {
                                     selectedMembers.remove(member)
                                 } else {
@@ -143,21 +146,28 @@ struct GroupMemberManagementView: View {
                 ContactPickerView(selectedMembers: $selectedMembers)
             }
             .task {
+                print("View task started")
                 do {
                     try await groupManager.fetchExistingMembers()
+                    print("Fetched existing members: \(groupManager.existingMembers.count)")
                     if showAllUsers {
                         try await groupManager.fetchAllUsers()
+                        print("Fetched all users: \(groupManager.allUsers.count)")
                     }
                 } catch {
+                    print("Error in view task: \(error)")
                     errorMessage = error.localizedDescription
                 }
             }
             .onChange(of: showAllUsers) { newValue in
                 Task {
                     if newValue {
+                        print("Show all users toggled on")
                         do {
                             try await groupManager.fetchAllUsers()
+                            print("Fetched all users after toggle: \(groupManager.allUsers.count)")
                         } catch {
+                            print("Error fetching all users: \(error)")
                             errorMessage = error.localizedDescription
                         }
                     }
@@ -198,7 +208,7 @@ struct GroupMemberManagementView: View {
     }
 }
 
-struct MemberRow: View {
+struct SelectableMemberRow: View {
     let member: Member
     let isSelected: Bool
     let action: () -> Void
